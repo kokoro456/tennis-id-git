@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UBUNTU 매칭시스템 v8.5</title>
+    <title>UBUNTU 매칭시스템 v9.0 (Cloud)</title>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
         }
@@ -13,19 +19,17 @@
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #d4edda; letter-spacing: -0.025em; -webkit-tap-highlight-color: transparent; } /* Changed to light green */
+        body { font-family: 'Inter', sans-serif; background-color: #d4edda; letter-spacing: -0.025em; -webkit-tap-highlight-color: transparent; }
         .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); }
         .stadium-panel { background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); }
         .male-gradient { background: linear-gradient(to right, #eff6ff, #dbeafe); border-left: 4px solid #2563eb; color: #1e40af; }
         .female-gradient { background: linear-gradient(to right, #fff1f2, #ffe4e6); border-left: 4px solid #e11d48; color: #9f1239; }
         
-        /* 타임라인 가로 스크롤 유지 */
         .timeline-scroll { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 20px; }
         .court-column { min-width: 300px; flex-shrink: 0; }
         
-        /* [V8.5 핵심] 캡처용 임시 클래스: 가로 스크롤을 해제하고 전체를 펼침 */
         .capture-mode { display: block !important; overflow: visible !important; width: fit-content !important; }
-        .capture-mode .court-column { margin-bottom: 2rem; width: 600px !important; } /* 캡처 시 가로폭 고정 */
+        .capture-mode .court-column { margin-bottom: 2rem; width: 600px !important; }
 
         @keyframes rank-pulse {
             0% { transform: scale(1.02); }
@@ -63,26 +67,67 @@
         .match-finished { opacity: 0.5; pointer-events: none; filter: grayscale(0.8); }
         ::-webkit-scrollbar { height: 5px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-
-
+        
+        /* Auth Overlay Style */
+        #auth-overlay { background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); }
     </style>
 </head>
 <body class="p-3 md:p-8">
 
-    <div class="max-w-7xl mx-auto">
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md border border-slate-200">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-black italic text-slate-900 uppercase tracking-tighter mb-2">UBUNTU <span class="text-blue-600">Login</span></h1>
+                <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">Tennis Matching System v9.0</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Email</label>
+                    <input type="email" id="auth-email" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="user@example.com">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Password</label>
+                    <input type="password" id="auth-password" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="••••••••">
+                </div>
+                
+                <div id="auth-error" class="text-red-500 text-xs font-bold text-center hidden"></div>
+
+                <button onclick="handleLogin()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-800 transition-all shadow-lg active:scale-95">로그인</button>
+                <div class="flex items-center justify-between gap-4">
+                    <div class="h-[1px] bg-slate-200 flex-1"></div>
+                    <span class="text-[9px] text-slate-400 font-bold">OR</span>
+                    <div class="h-[1px] bg-slate-200 flex-1"></div>
+                </div>
+                <button onclick="handleSignup()" class="w-full bg-white text-slate-600 border border-slate-200 py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-50 transition-all">회원가입</button>
+            </div>
+            
+            <div class="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <p class="text-[10px] text-blue-600 font-bold leading-relaxed text-center">
+                    📢 처음 오셨나요? 이메일과 비밀번호를 입력하고 <span class="underline">회원가입</span>을 누르시면 바로 계정이 생성됩니다.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container (Hidden initially) -->
+    <div id="app-container" class="max-w-7xl mx-auto hidden filter blur-sm transition-all duration-500">
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
                 <h1 class="text-3xl font-black italic text-slate-900 uppercase tracking-tighter">UBUNTU <span class="text-blue-600">매칭시스템</span></h1>
-                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-1">Full Export Engine v8.5 <span id="app-version" class="text-blue-500 ml-2"></span></p>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-1">Cloud Engine v9.0 <span id="app-version" class="text-blue-500 ml-2"></span></p>
+                <p id="user-display" class="text-[10px] font-bold text-slate-500 mt-1">Guest Mode</p>
             </div>
             <div class="flex flex-wrap gap-2">
+                <button onclick="handleLogout()" class="bg-slate-100 text-slate-500 px-3 py-2 rounded-xl text-[10px] font-black">로그아웃</button>
+                <div class="h-8 w-[1px] bg-slate-200 mx-1 hidden md:block"></div>
                 <button onclick="exportData()" class="bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black border border-blue-100">내보내기</button>
                 <button onclick="document.getElementById('importFile').click()" class="bg-orange-50 text-orange-600 px-3 py-2 rounded-xl text-[10px] font-black border border-orange-100">불러오기</button>
                 <input type="file" id="importFile" class="hidden" accept=".json" onchange="importData(event)">
                 <div class="h-8 w-[1px] bg-slate-200 mx-1 hidden md:block"></div>
                 <button onclick="copyToClipboard()" class="bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-[10px] font-black">카톡 복사</button>
                 <button onclick="saveAsImage()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-[11px] font-black shadow-lg">전체 이미지 저장 📸</button>
-
             </div>
         </header>
 
@@ -159,6 +204,69 @@
     </div>
 
     <script>
+        // -----------------------------------------------------------
+        // [사용자 설정 필요] Firebase 구성 객체
+        // Firebase Console -> 프로젝트 설정 -> 내 앱 -> SDK 설정 및 구성
+        // -----------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyBhuTEuJZLK_0H648mhCqDE8GWayhp5jbY",
+            authDomain: "tennis-id-test.firebaseapp.com",
+            projectId: "tennis-id-test",
+            storageBucket: "tennis-id-test.firebasestorage.app",
+            messagingSenderId: "1064769851168",
+            appId: "1:1064769851168:web:2ec522e7f4bee67aae5145"
+        };
+        // -----------------------------------------------------------
+
+        let db, auth, currentUser;
+
+        function initApp() {
+            try {
+                if (typeof firebase === 'undefined') {
+                    throw new Error("Firebase SDK가 로드되지 않았습니다. 네트워크 연결을 확인하세요.");
+                }
+
+                if (Object.keys(firebaseConfig).length > 0) {
+                    if (!firebase.apps.length) {
+                        firebase.initializeApp(firebaseConfig);
+                        console.log("Firebase initialized");
+                    } else {
+                        firebase.app(); // already initialized
+                        console.log("Firebase already initialized");
+                    }
+                    
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                    
+                    // Setup Auth Listener
+                    auth.onAuthStateChanged(user => {
+                        if (user) {
+                            currentUser = user;
+                            document.getElementById('user-display').innerText = `User: ${user.email}`;
+                            document.getElementById('auth-overlay').classList.add('hidden');
+                            const app = document.getElementById('app-container');
+                            app.classList.remove('hidden', 'filter', 'blur-sm');
+                            loadData(); 
+                        } else {
+                            currentUser = null;
+                            document.getElementById('auth-overlay').classList.remove('hidden');
+                            document.getElementById('app-container').classList.add('hidden');
+                        }
+                    });
+
+                } else {
+                    console.warn("Firebase config is missing.");
+                    document.getElementById('auth-error').innerText = "시스템 오류: Firebase 설정이 필요합니다.";
+                    document.getElementById('auth-error').classList.remove('hidden');
+                }
+            } catch (e) {
+                console.error("Firebase init error:", e);
+                document.getElementById('auth-error').innerText = `초기화 오류: ${e.message}`;
+                document.getElementById('auth-error').classList.remove('hidden');
+            }
+        }
+
+        // --- Core Data ---
         const initialMembers = [
             { id: 1, name: '김철수', gender: '남', ntpr: 3.5 }, { id: 2, name: '이영희', gender: '여', ntpr: 3.0 },
             { id: 3, name: '박지성', gender: '남', ntpr: 4.5 }, { id: 4, name: '손흥민', gender: '남', ntpr: 5.0 },
@@ -168,19 +276,91 @@
             { id: 11, name: '카리나', gender: '여', ntpr: 3.5 }, { id: 12, name: '윈터', gender: '여', ntpr: 3.0 }
         ];
 
-        let members = JSON.parse(localStorage.getItem('tennis_v85_data')) || initialMembers;
+        let members = initialMembers;
         let stadium = [];
         let playerStats = {};
         let editingId = null;
 
+        // --- Auth Logic ---
         document.addEventListener('DOMContentLoaded', () => {
+            initApp();
+            
+            // Common Init
             const now = new Date();
             document.getElementById('capture-date').innerText = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            renderLibrary(); renderRanking(); initCourtInputs();
             document.getElementById('court-count').addEventListener('change', initCourtInputs);
         });
 
-        function saveLocal() { localStorage.setItem('tennis_v85_data', JSON.stringify(members)); }
+        async function handleLogin() {
+            const email = document.getElementById('auth-email').value;
+            const pw = document.getElementById('auth-password').value;
+            try {
+                await auth.signInWithEmailAndPassword(email, pw);
+            } catch (error) {
+                showAuthError(error.message);
+            }
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('auth-email').value;
+            const pw = document.getElementById('auth-password').value;
+            try {
+                await auth.createUserWithEmailAndPassword(email, pw);
+                // Initial data save for new user
+                members = initialMembers;
+                await saveData();
+            } catch (error) {
+                showAuthError(error.message);
+            }
+        }
+
+        function handleLogout() {
+            auth.signOut();
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('auth-error');
+            el.innerText = msg;
+            el.classList.remove('hidden');
+        }
+
+        // --- Data Persistence (Firestore) ---
+        async function loadData() {
+            if (!currentUser || !db) return;
+            try {
+                const doc = await db.collection('users').doc(currentUser.uid).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (data.members) members = data.members;
+                } else {
+                    // First time? Save initial
+                    await saveData();
+                }
+                renderLibrary(); renderRanking(); initCourtInputs();
+            } catch (e) {
+                console.error("Error loading data:", e);
+                alert("데이터 불러오기 실패");
+            }
+        }
+
+        async function saveData() {
+            if (!currentUser || !db) {
+                // Fallback to local if auth fails or offline (optional)
+                localStorage.setItem('tennis_v85_data', JSON.stringify(members));
+                return;
+            }
+            try {
+                await db.collection('users').doc(currentUser.uid).set({
+                    members: members,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                console.log("Data saved to Firestore");
+            } catch (e) {
+                console.error("Error saving data:", e);
+            }
+        }
+
+        // --- App Logic (Modified to use saveData instead of saveLocal) ---
 
         // [V8.5 핵심] 전체 대진표 이미지 저장 로직
         async function saveAsImage() {
@@ -191,7 +371,6 @@
             
             alert('전체 코트 대진표를 하나의 이미지로 생성합니다.\n잠시만 기다려주세요.');
 
-            // 1. 임시로 가로 스크롤을 해제하고 전체를 펼침
             const originalBoardClass = board.className;
             board.className = "capture-mode"; 
 
@@ -200,7 +379,7 @@
                     backgroundColor: '#ffffff', 
                     scale: 2, 
                     useCORS: true,
-                    windowWidth: 1200, // 넉넉한 너비 확보
+                    windowWidth: 1200, 
                 });
 
                 const data = canvas.toDataURL("image/png");
@@ -222,12 +401,10 @@
                 alert('이미지 생성 중 오류가 발생했습니다.');
                 console.error(e);
             } finally {
-                // 2. 캡처가 끝나면 원래 레이아웃(가로 스크롤)으로 복구
                 board.className = originalBoardClass;
             }
         }
 
-        // --- 기타 데이터 연동 로직 ---
         function exportData() {
             const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(JSON.stringify(members, null, 2));
             const linkElement = document.createElement('a');
@@ -244,7 +421,7 @@
             reader.onload = function(e) {
                 try {
                     members = JSON.parse(e.target.result);
-                    saveLocal(); location.reload();
+                    saveData(); location.reload();
                 } catch (err) { alert('파일 형식이 잘못되었습니다.'); }
             };
             reader.readAsText(file);
@@ -271,7 +448,7 @@
                 if(p) { p.name = name; p.gender = gender; p.ntpr = ntpr; }
                 editingId = null; document.getElementById('submit-btn').innerText = "Add / Update";
             } else { members.push({ id: Date.now(), name, gender, ntpr }); }
-            saveLocal(); renderLibrary(); renderRanking(); resetForm();
+            saveData(); renderLibrary(); renderRanking(); resetForm();
         }
 
         function editPlayer(id, e) {
@@ -380,7 +557,7 @@
             [...tA].forEach(id => { playerStats[id].ptsWon += sa; playerStats[id].ptsLost += sb; if(sa>sb) playerStats[id].wins++; else if(sb>sa) playerStats[id].losses++; });
             [...tB].forEach(id => { playerStats[id].ptsWon += sb; playerStats[id].ptsLost += sa; if(sb>sa) playerStats[id].wins++; else if(sa>sb) playerStats[id].losses++; });
             sa > sb ? applyNtpr(tA, 0.1) : (sb > sa ? applyNtpr(tB, 0.1) : null); 
-            card.classList.add('match-finished'); btn.innerHTML = 'DONE ✓'; saveLocal(); renderStats(); renderRanking(); renderLibrary();
+            card.classList.add('match-finished'); btn.innerHTML = 'DONE ✓'; saveData(); renderStats(); renderRanking(); renderLibrary();
         }
 
         function applyNtpr(ids, change) { ids.forEach(id => { const m = members.find(m => m.id == id); if (m) m.ntpr = Math.min(7.0, m.ntpr + change); }); }
@@ -402,7 +579,7 @@
                 </div>`).join('');
         }
 
-        function resetAllData() { if(confirm('모든 데이터를 초기화할까요?')) { localStorage.clear(); location.reload(); } }
+        function resetAllData() { if(confirm('모든 데이터를 초기화할까요?')) { members = initialMembers; saveData(); location.reload(); } } 
         
         function copyToClipboard() {
             if (stadium.length === 0) return alert('대진표가 없습니다.');
